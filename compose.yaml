@@ -1,0 +1,14 @@
+services:
+  bot:
+    build:
+      context: .
+      dockerfile: Containerfile
+    restart: always
+    volumes:
+      - './data:/app/data:rw,Z'
+    env_file: .env
+    tty: true
+    environment:
+      RSPOTIFY_CACHE_PATH: /app/data/.spotify_token_cache.json
+      RUST_LOG: debug
+
