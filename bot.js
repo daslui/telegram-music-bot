@@ -4,7 +4,8 @@ import SpotifyWebApi from 'spotify-web-api-node';
 import rateLimit from 'telegraf-ratelimit';
 
 // Telegram settings
-const votingGroup = "-4589701321"
+const votingGroup = "-1002454626909"
+const votingGroupThread = "637"
 const admins = ["117441870"]
 
 // Spotify globals
@@ -208,7 +209,8 @@ bot.on('message', rateLimit(trackLimitConfig), async (ctx) => {
           /* Also, we can have URL buttons. */
           [{ text: "Auf Spotify.com anzeigen", url: trackInfo.body.external_urls.spotify }]
         ]
-      }
+      },
+      ...(votingGroupThread && {'message_thread_id': votingGroupThread})
     });
     ctx.reply(`${trackDescription.name} von ${trackDescription.artists} wurde angefragt.`)
   }
