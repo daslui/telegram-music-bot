@@ -4,9 +4,10 @@ import SpotifyWebApi from 'spotify-web-api-node';
 import rateLimit from 'telegraf-ratelimit';
 
 // Telegram settings
-const votingGroup = "-1002454626909"
-const votingGroupThread = "637"
-const admins = ["117441870"]
+const votingGroup = "-1002454626909";
+const votingGroupThread = "637";
+const admins = ["117441870"];
+const deleteMessageAfterAcceptDecline = false;
 
 // Spotify globals
 var spotifyApi;
@@ -23,7 +24,7 @@ function isVotingGroup(id) {
 }
 
 function getSpotify(refresh = true) {
-  if(spotifyApi !== undefined && refresh === true) {
+  if (spotifyApi !== undefined && refresh === true) {
     refreshSpotifyToken(spotifyRefreshToken, spotifyAccessToken)
   }
   return spotifyApi;
@@ -174,12 +175,22 @@ bot.action(/^accept:(spotify:track:\w+)/, (ctx) => {
       let trackInfo = formatTrackInfo(track)
       trackDescription = `${trackInfo.name} • ${trackInfo.artists}`
     }
-    ctx.reply(`Lied zur Queue hinzugefügt: ${trackDescription}`)
-    ctx.deleteMessage()
+    ctx.reply(`Lied zur Queue hinzugefügt: ${trackDescription}`);
+    if (deleteMessageAfterAcceptDecline) {
+      ctx.deleteMessage()
+    } else {
+      ctx.editMessageText(`Von ${formatUser(ctx.update.callback_query.from)} abgelehnt: ${ctx.text}`);
+      ctx.editMessageReplyMarkup(undefined);
+    }
   })
 })
 bot.action('decline', (ctx) => {
-  ctx.deleteMessage()
+  if (deleteMessageAfterAcceptDecline) {
+    ctx.deleteMessage()
+  } else {
+    ctx.editMessageText(`Von ${formatUser(ctx.update.callback_query.from)} abgelehnt: ${ctx.text}`);
+    ctx.editMessageReplyMarkup(undefined);
+  }
 })
 bot.command("id", (ctx) => {
   if (isAdmin(ctx.from.id)) {
@@ -198,7 +209,7 @@ bot.on('message', rateLimit(trackLimitConfig), async (ctx) => {
     let trackDescription = formatTrackInfo(trackInfo);
     let requester = formatUser(ctx.update.message.from);
 
-    bot.telegram.sendMessage(votingGroup, "Neue Anfrage von " + requester + "\n"
+    bot.telegram.sendMessage(votingGroup, "Anfrage von " + requester + "\n"
       + `${trackDescription.name} • ${trackDescription.artists}`, {
       reply_markup: {
         inline_keyboard: [
@@ -210,7 +221,7 @@ bot.on('message', rateLimit(trackLimitConfig), async (ctx) => {
           [{ text: "Auf Spotify.com anzeigen", url: trackInfo.body.external_urls.spotify }]
         ]
       },
-      ...(votingGroupThread && {'message_thread_id': votingGroupThread})
+      ...(votingGroupThread && { 'message_thread_id': votingGroupThread })
     });
     ctx.reply(`${trackDescription.name} von ${trackDescription.artists} wurde angefragt.`)
   }
