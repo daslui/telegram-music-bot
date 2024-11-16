@@ -59,10 +59,9 @@ storage.initSync( /* options ... */);
 // Setup Spotify
 if (process.env.SPOTIFY_CLIENT_ID === undefined
   || process.env.SPOTIFY_CLIENT_SECRET === undefined) {
-  throw new TypeError("BOT_TOKEN must be provided!");
+  throw new TypeError("SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET must be provided!");
 }
 import SpotifyWebApi from 'spotify-web-api-node';
-import { message } from 'telegraf/filters';
 var spotifyApi = new SpotifyWebApi({
   clientId: process.env.SPOTIFY_CLIENT_ID,
   clientSecret: process.env.SPOTIFY_CLIENT_SECRET,
@@ -101,7 +100,7 @@ const trackLimitConfig = {
   keyGenerator: function (ctx) {
     return ctx.from.id
   },
-  onLimitExceeded: (ctx, next) => ctx.reply('Limit überschritten, bitte warten!')
+  onLimitExceeded: (ctx) => ctx.reply('Limit überschritten, bitte warten!')
 }
 bot.use(rateLimit())
 const helpText = `Sende eine Spotify-URL, um einen Musikwunsch zu stellen.
@@ -126,7 +125,7 @@ bot.command('spotifytoken', (ctx) => {
     let spotifyCode = ctx.args[0]
     spotifyApi.authorizationCodeGrant(spotifyCode).then(
       function (data) {
-        ctx.reply('The token expires in ' + data.body['expires_in']);
+        ctx.reply('Authorized. The token expires in ' + data.body['expires_in']);
         console.log('The token expires in ' + data.body['expires_in']);
         console.log('The access token is ' + data.body['access_token']);
         console.log('The refresh token is ' + data.body['refresh_token']);
