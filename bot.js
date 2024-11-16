@@ -1,11 +1,17 @@
-import { Telegraf } from 'telegraf'
-//import { Telegraf, session } from 'telegraf'
-// import { SQLite } from "@telegraf/session/sqlite";
+import { Telegraf } from 'telegraf';
 import storage from 'node-persist';
-import rateLimit from 'telegraf-ratelimit'
+import SpotifyWebApi from 'spotify-web-api-node';
+import rateLimit from 'telegraf-ratelimit';
 
+// Telegram settings
 const votingGroup = "-4589701321"
 const admins = ["117441870"]
+
+// Spotify globals
+var spotifyApi;
+var spotifyRefreshToken;
+var spotifyAccessToken;
+var spotifyTokenExpires = Date.now();
 
 function isAdmin(id) {
   return admins.includes(String(id));
@@ -13,6 +19,33 @@ function isAdmin(id) {
 
 function isVotingGroup(id) {
   return String(id) == String(votingGroup)
+}
+
+function getSpotify(refresh = true) {
+  if(spotifyApi !== undefined && refresh === true) {
+    refreshSpotifyToken(spotifyRefreshToken, spotifyAccessToken)
+  }
+  return spotifyApi;
+}
+
+function refreshSpotifyToken(refreshToken, accessToken, force = false) {
+  if (new Date() >= spotifyTokenExpires || force === true) {
+    spotifyApi.setRefreshToken(refreshToken)
+    spotifyApi.setAccessToken(accessToken)
+    spotifyApi.refreshAccessToken().then(
+      function (data) {
+        console.log('The access token has been refreshed!');
+
+        // Save the access token so that it's used in future calls
+        spotifyApi.setAccessToken(data.body['access_token']);
+        spotifyTokenExpires = Date.now() + data.body['expires_in'] * 1000;
+        console.debug("New expiry: " + new Date(spotifyTokenExpires).toISOString())
+      },
+      function (err) {
+        console.log('Could not refresh access token', err);
+      }
+    );
+  }
 }
 
 function spotifyUrlToUri(url) {
@@ -33,13 +66,13 @@ async function resolveTrack(uri) {
     return undefined
   } else {
     let trackId = matches[1]
-    let track = await spotifyApi.getTrack(trackId)
+    let track = await getSpotify().getTrack(trackId)
     return track
   }
 }
 
 function addToSpotifyQueue(uri) {
-  return spotifyApi.addToQueue(uri)
+  return getSpotify().addToQueue(uri)
 }
 
 function formatTrackInfo(trackInfo) {
@@ -61,28 +94,15 @@ if (process.env.SPOTIFY_CLIENT_ID === undefined
   || process.env.SPOTIFY_CLIENT_SECRET === undefined) {
   throw new TypeError("SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET must be provided!");
 }
-import SpotifyWebApi from 'spotify-web-api-node';
-var spotifyApi = new SpotifyWebApi({
+spotifyApi = new SpotifyWebApi({
   clientId: process.env.SPOTIFY_CLIENT_ID,
   clientSecret: process.env.SPOTIFY_CLIENT_SECRET,
   redirectUri: 'https://luisental.org/noop'
 });
-var spotifyRefreshToken = await storage.get("spotify_refresh_token")
-var spotifyAccessToken = await storage.get("spotify_access_token")
+spotifyRefreshToken = await storage.get("spotify_refresh_token")
+spotifyAccessToken = await storage.get("spotify_access_token")
 if (spotifyRefreshToken !== undefined && spotifyAccessToken !== undefined) {
-  spotifyApi.setRefreshToken(spotifyRefreshToken)
-  spotifyApi.setAccessToken(spotifyAccessToken)
-  spotifyApi.refreshAccessToken().then(
-    function (data) {
-      console.log('The access token has been refreshed!');
-
-      // Save the access token so that it's used in future calls
-      spotifyApi.setAccessToken(data.body['access_token']);
-    },
-    function (err) {
-      console.log('Could not refresh access token', err);
-    }
-  );
+  refreshSpotifyToken(spotifyRefreshToken, spotifyAccessToken);
 }
 
 // Setup Bot
