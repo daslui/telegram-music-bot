@@ -1,0 +1,28 @@
+{
+  "name": "telegram-music-bot",
+  "version": "0.0.1",
+  "description": "",
+  "main": "bot.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/daslui/telegram-music-bot.git"
+  },
+  "keywords": [
+    "telegram",
+    "music",
+    "bot",
+    "spotify"
+  ],
+  "author": "Jasper Wiegratz",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/daslui/telegram-music-bot/issues"
+  },
+  "homepage": "https://github.com/daslui/telegram-music-bot#readme",
+  "dependencies": {
+    "telegraf": "^4.16.3"
+  }
+}
