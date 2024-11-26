@@ -5,6 +5,9 @@ services:
       dockerfile: Containerfile
     restart: always
     volumes:
-      - './data:/app/.node-persist:rw'
+      - './data:/app/data:rw,Z'
     env_file: .env
     tty: true
+    environment:
+      RUST_LOG: debug
+

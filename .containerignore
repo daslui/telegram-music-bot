@@ -1,0 +1,8 @@
+target
+.containerignore
+.git*
+.env*
+LICENSE
+README
+Containerfile
+compose.yaml
