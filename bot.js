@@ -39,7 +39,8 @@ function refreshSpotifyToken(refreshToken, accessToken, force = false) {
         console.log('The access token has been refreshed!');
 
         // Save the access token so that it's used in future calls
-        spotifyApi.setAccessToken(data.body['access_token']);
+        spotifyAccessToken = data.body['access_token']
+        spotifyApi.setAccessToken(spotifyAccessToken);
         spotifyTokenExpires = Date.now() + data.body['expires_in'] * 1000;
         console.debug("New expiry: " + new Date(spotifyTokenExpires).toISOString())
       },
