@@ -8,7 +8,7 @@ teloxide = { version = "0.13", features = ["macros"] }
 log = "0.4"
 pretty_env_logger = "0.5"
 tokio = { version =  "1.8", features = ["rt-multi-thread", "macros"] }
-rspotify = {version = "0.13.3", features = ["cli"]}
+rspotify = {version = "0.14.0", features = ["cli"]}
 serde = "1.0.215"
 serde_json = "1.0.133"
 regex = "1.11.1"
