@@ -1,4 +1,6 @@
 use log::warn;
+use regex::Regex;
+use reqwest::{self, redirect};
 use rspotify::{
     model::TrackId,
     prelude::{BaseClient, OAuthClient},
@@ -19,8 +21,6 @@ use teloxide::{
     },
     utils::command::BotCommands,
 };
-
-use regex::Regex;
 
 type MyDialogue = Dialogue<State, InMemStorage<State>>;
 type HandlerResult = Result<(), Box<dyn std::error::Error + Send + Sync>>;
@@ -53,7 +53,7 @@ async fn main() {
 
     let bot = Bot::from_env();
 
-    Dispatcher::builder(bot, schema())
+    Dispatcher::builder(bot, schema().await)
         .dependencies(dptree::deps![
             InMemStorage::<State>::new(),
             setup_spotify().await,
@@ -111,7 +111,7 @@ fn is_voting_chat(msg: Message, cfg: ConfigParameters) -> bool {
     msg.chat.id == cfg.voting_chat && msg.thread_id == cfg.voting_thread
 }
 
-fn schema() -> UpdateHandler<Box<dyn std::error::Error + Send + Sync + 'static>> {
+async fn schema() -> UpdateHandler<Box<dyn std::error::Error + Send + Sync + 'static>> {
     use dptree::case;
 
     let admin_command_handler = teloxide::filter_command::<Command, _>().branch(
@@ -142,20 +142,18 @@ fn schema() -> UpdateHandler<Box<dyn std::error::Error + Send + Sync + 'static>>
             dptree::filter(|cfg: ConfigParameters, msg: Message| {
                 !msg.chat.is_group() && !is_voting_chat(msg, cfg)
             })
-            .chain(
+            .branch(
                 dptree::filter(|msg: Message| {
-                    msg.text()
-                        .is_some_and(|text| SpotifyTrackId::from_url(text.into()).is_some())
-                })
-                .branch(
-                    dptree::filter(|msg: Message| {
-                        msg.text()
-                            .is_some_and(|text| SpotifyTrackId::from_url(text.into()).is_some())
+                    msg.text().is_some_and(|text| {
+                        Regex::new(r"https?://(open\.spotify\.com|spotify\.link)/(\w+)")
+                            .unwrap()
+                            .find(text)
+                            .is_some()
                     })
-                    .endpoint(request_track),
-                )
-                .endpoint(user_help),
-            ),
+                })
+                .endpoint(request_track),
+            )
+            .endpoint(user_help),
         );
 
     dialogue::enter::<Update, InMemStorage<State>, State, _>()
@@ -214,7 +212,7 @@ async fn spotify_login_token(
 async fn request_track(bot: Bot, cfg: ConfigParameters, msg: Message) -> HandlerResult {
     let requester = format_author(msg.from.as_ref());
     let track = SpotifyTrackId::from_url(msg.text().unwrap().into());
-    match track {
+    match track.await {
         Some(track) => {
             // inform requester
             bot.send_message(
@@ -378,11 +376,22 @@ impl SpotifyTrackId {
             })
         })
     }
-    fn from_url(url: String) -> Option<Self> {
-        let re = Regex::new(r"https?://open\.spotify\.com/track/(\w+)").unwrap();
-        re.captures(&url)
-            .and_then(|caps| caps.get(1).map(|m| m.as_str().to_string()))
-            .map(|id| Self { track_id: id })
+    async fn from_url(url: String) -> Option<Self> {
+        let re_link = Regex::new(r"https?://spotify\.link/(\w+)").unwrap();
+        let track_url = if let Some(mat) = re_link.find(&url) {
+            Self::resolve_spotify_link(&url).await
+        } else {
+            None
+        };
+
+        let re_open = Regex::new(r"https?://open\.spotify\.com/track/(\w+)").unwrap();
+        let open_url = &track_url.unwrap_or(url);
+        let match_open_url = re_open.captures(&open_url);
+        match_open_url.and_then(|mat| {
+            mat.get(1)
+                .map(|m| m.as_str().to_string())
+                .map(|id| Self { track_id: id })
+        })
     }
     #[allow(dead_code)]
     fn track_urn(&self) -> String {
@@ -390,6 +399,21 @@ impl SpotifyTrackId {
     }
     fn track_url(&self) -> String {
         format!("http://open.spotify.com/track/{}", self.track_id)
+    }
+
+    async fn resolve_spotify_link(url: &String) -> Option<String> {
+        let custom = redirect::Policy::custom(|attempt| {
+            if attempt.previous().len() > 5 {
+                attempt.error("too many redirects")
+            } else if attempt.url().host_str() == Some("spotify.com") {
+                attempt.stop()
+            } else {
+                attempt.follow()
+            }
+        });
+        let client = reqwest::Client::builder().redirect(custom).build().unwrap();
+        let res = client.get(url).send().await.unwrap();
+        Some(res.url().to_string())
     }
 }
 
