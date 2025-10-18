@@ -1,12 +1,10 @@
 use log::warn;
 use regex::Regex;
-use reqwest::{self, redirect};
 use rspotify::{
     model::TrackId,
     prelude::{BaseClient, OAuthClient},
-    AuthCodeSpotify,
 };
-use std::{env, error::Error, ops::Not, path::PathBuf};
+use std::{env, error::Error, ops::Not};
 use teloxide::{
     dispatching::{
         dialogue::{self, GetChatId, InMemStorage},
@@ -16,14 +14,16 @@ use teloxide::{
     prelude::*,
     requests::JsonRequest,
     types::{
-        InlineKeyboardButton, InlineKeyboardMarkup, MaybeInaccessibleMessage, MessageId,
-        ReplyParameters, ThreadId, User,
+        InlineKeyboardButton, InlineKeyboardMarkup, LinkPreviewOptions, MaybeInaccessibleMessage,
+        MessageId, ParseMode, ReplyParameters, ThreadId, User,
     },
     utils::command::BotCommands,
 };
 
 type MyDialogue = Dialogue<State, InMemStorage<State>>;
 type HandlerResult = Result<(), Box<dyn std::error::Error + Send + Sync>>;
+
+use tg_music_bot::spotify::*;
 
 #[tokio::main]
 async fn main() {
@@ -63,48 +63,6 @@ async fn main() {
         .build()
         .dispatch()
         .await;
-}
-
-async fn setup_spotify() -> AuthCodeSpotify {
-    use rspotify::{scopes, AuthCodeSpotify, Credentials, OAuth};
-
-    let creds =
-        Credentials::from_env().expect("RSPOTIFY_CLIENT_ID or RSPOTIFY_CLIENT_SECRET not set");
-    let oauth = OAuth {
-        redirect_uri: "http://localhost:8888/callback".to_string(),
-        scopes: scopes!(
-            "user-read-private",
-            "user-read-email",
-            "user-read-playback-state",
-            "user-modify-playback-state"
-        ),
-        ..Default::default()
-    };
-    let cache_path = env::var("RSPOTIFY_CACHE_PATH")
-        .map(|v| PathBuf::from(v))
-        .unwrap_or(rspotify::Config::default().cache_path);
-    let config = rspotify::Config {
-        token_cached: true,
-        token_refreshing: true,
-        cache_path: cache_path,
-        ..rspotify::Config::default()
-    };
-    let mut spotify = AuthCodeSpotify::with_config(creds.clone(), oauth.clone(), config.clone());
-    // attempt to read token cache from file and use token
-    match spotify.read_token_cache(true).await {
-        Ok(Some(token)) => {
-            spotify = AuthCodeSpotify::from_token_with_config(token, creds, oauth, config);
-            let token = spotify.get_token().lock().await.unwrap().clone();
-            log::info!(
-                "Using cached Spotify token, expires {}",
-                token
-                    .and_then(|t| t.expires_at.map(|d| d.to_string()))
-                    .unwrap_or("unknown".to_string()),
-            )
-        }
-        _ => log::info!("No Spotify token in cache"),
-    }
-    spotify
 }
 
 fn is_voting_chat(msg: Message, cfg: ConfigParameters) -> bool {
@@ -149,15 +107,6 @@ async fn schema() -> UpdateHandler<Box<dyn std::error::Error + Send + Sync + 'st
     dialogue::enter::<Update, InMemStorage<State>, State, _>()
         .branch(callback_handler)
         .branch(message_handler)
-}
-
-fn msg_is_spotify_link(msg: Message) -> bool {
-    msg.text().is_some_and(|text| {
-        Regex::new(r"https?://(open\.spotify\.com|spotify\.link)/(\w+)")
-            .unwrap()
-            .find(text)
-            .is_some()
-    })
 }
 
 async fn spotify_login(
@@ -208,29 +157,39 @@ async fn spotify_login_token(
     Ok(())
 }
 
-async fn request_track(bot: Bot, cfg: ConfigParameters, msg: Message) -> HandlerResult {
+async fn request_track(
+    bot: Bot,
+    cfg: ConfigParameters,
+    msg: Message,
+    spotify: rspotify::AuthCodeSpotify,
+) -> HandlerResult {
     let requester = format_author(msg.from.as_ref());
-    let track = SpotifyTrackId::from_url(msg.text().unwrap().into());
-    match track.await {
-        Some(track) => {
+
+    match fetch_track(&spotify, msg.text().unwrap().into()).await {
+        Ok(track) => {
+            let id = track.id.as_ref().unwrap().to_string();
+            let track_text = format_track_text(&track);
+            let preview = link_preview_for_url(track.album.images.first().map(|i| i.url.clone()));
             // inform requester
             bot.send_message(
                 msg.chat.id,
-                format!("Track wurde angefragt: {}", track.track_url()),
+                format!("✅ Successfully requested track.\n\n{}", track_text),
             )
+            .parse_mode(ParseMode::Html)
+            .link_preview_options(preview.clone())
             .await?;
 
             // inform voting chat
             let buttons = vec![vec![
                 InlineKeyboardButton::new(
-                    "✅ In Queue".to_string(),
+                    "✅ Add to queue".to_string(),
                     teloxide::types::InlineKeyboardButtonKind::CallbackData(format!(
-                        "accept:spotify:track:{}",
-                        track.track_id
+                        "accept:{}",
+                        id
                     )),
                 ),
                 InlineKeyboardButton::new(
-                    "❌ Löschen".to_string(),
+                    "❌ Decline".to_string(),
                     teloxide::types::InlineKeyboardButtonKind::CallbackData("decline".to_string()),
                 ),
             ]];
@@ -239,20 +198,23 @@ async fn request_track(bot: Bot, cfg: ConfigParameters, msg: Message) -> Handler
             let mut voting_msg = bot
                 .send_message(
                     cfg.voting_chat,
-                    format!("Anfrage von {}:\n{}", requester, track.track_url()),
+                    format!("User {} requested:\n{}", requester, track_text),
                 )
+                .parse_mode(ParseMode::Html)
+                .link_preview_options(preview)
                 .reply_markup(keyboard);
             if let Some(thread) = cfg.voting_thread {
                 voting_msg = voting_msg.message_thread_id(thread);
             }
             voting_msg.await?;
+            Ok(())
         }
-        None => {
-            bot.send_message(msg.chat.id, "Failed to request track")
+        Err(e) => {
+            bot.send_message(msg.chat.id, "❌ Failed to find track.")
                 .await?;
+            HandlerResult::Err(format!("Failed to fetch a track {:?}", e).into())
         }
     }
-    Ok(())
 }
 
 async fn handle_callback(
@@ -272,9 +234,9 @@ async fn handle_callback(
                     Ok(trackid) => match spotify.add_item_to_queue(trackid.into(), None).await {
                         Ok(_) => {
                             format!(
-                                "✅ {} hat akzeptiert: {}",
+                                "✅ {} has added to queue:\n{}",
                                 format_author(Some(&q.from)),
-                                track.track_url()
+                                msg.and_then(|m| m.text()).unwrap_or(&track.track_url())
                             )
                         }
                         Err(err) => {
@@ -301,6 +263,7 @@ async fn handle_callback(
     if let Some(msg) = msg {
         let mut update = bot
             .edit_message_text(msg.chat.id, msg.id, reply)
+            .parse_mode(ParseMode::Html)
             .reply_markup(InlineKeyboardMarkup::default());
         if disable_preview {
             update = update.link_preview_options(teloxide::types::LinkPreviewOptions {
@@ -358,61 +321,22 @@ async fn user_help(bot: Bot, msg: Message) -> HandlerResult {
     Ok(())
 }
 
-struct SpotifyTrackId {
-    pub track_id: String,
+fn msg_is_spotify_link(msg: Message) -> bool {
+    msg.text().is_some_and(|text| {
+        Regex::new(r"https?://(open\.spotify\.com|spotify\.link)/(\w+)")
+            .unwrap()
+            .find(text)
+            .is_some()
+    })
 }
 
-impl SpotifyTrackId {
-    #[allow(dead_code)]
-    fn from_id(id: String) -> Self {
-        Self { track_id: id }
-    }
-    fn from_urn(urn: String) -> Option<Self> {
-        let re = regex::Regex::new(r"(accept:)?spotify:track:(\w+)").unwrap();
-        re.captures(&urn).and_then(|c| {
-            c.get(2).map(|m| Self {
-                track_id: m.as_str().into(),
-            })
-        })
-    }
-    async fn from_url(url: String) -> Option<Self> {
-        let re_link = Regex::new(r"https?://spotify\.link/(\w+)").unwrap();
-        let track_url = if re_link.is_match(&url) {
-            Self::resolve_spotify_link(&url).await
-        } else {
-            None
-        };
-
-        let re_open = Regex::new(r"https?://open\.spotify\.com/track/(\w+)").unwrap();
-        let open_url = &track_url.unwrap_or(url);
-        let match_open_url = re_open.captures(&open_url);
-        match_open_url.and_then(|mat| {
-            mat.get(1)
-                .map(|m| m.as_str().to_string())
-                .map(|id| Self { track_id: id })
-        })
-    }
-    #[allow(dead_code)]
-    fn track_urn(&self) -> String {
-        format!("spotify:track:{}", self.track_id)
-    }
-    fn track_url(&self) -> String {
-        format!("http://open.spotify.com/track/{}", self.track_id)
-    }
-
-    async fn resolve_spotify_link(url: &String) -> Option<String> {
-        let custom = redirect::Policy::custom(|attempt| {
-            if attempt.previous().len() > 5 {
-                attempt.error("too many redirects")
-            } else if attempt.url().host_str() == Some("spotify.com") {
-                attempt.stop()
-            } else {
-                attempt.follow()
-            }
-        });
-        let client = reqwest::Client::builder().redirect(custom).build().unwrap();
-        let res = client.get(url).send().await.unwrap();
-        Some(res.url().to_string())
+fn link_preview_for_url(url: Option<String>) -> LinkPreviewOptions {
+    LinkPreviewOptions {
+        is_disabled: false,
+        url,
+        prefer_small_media: false,
+        prefer_large_media: false,
+        show_above_text: true,
     }
 }
 
