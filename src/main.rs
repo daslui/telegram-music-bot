@@ -140,25 +140,24 @@ async fn schema() -> UpdateHandler<Box<dyn std::error::Error + Send + Sync + 'st
         .branch(command_handler)
         .branch(
             dptree::filter(|cfg: ConfigParameters, msg: Message| {
-                !msg.chat.is_group() && !is_voting_chat(msg, cfg)
+                msg.chat.is_private() && !is_voting_chat(msg, cfg)
             })
-            .branch(
-                dptree::filter(|msg: Message| {
-                    msg.text().is_some_and(|text| {
-                        Regex::new(r"https?://(open\.spotify\.com|spotify\.link)/(\w+)")
-                            .unwrap()
-                            .find(text)
-                            .is_some()
-                    })
-                })
-                .endpoint(request_track),
-            )
+            .branch(dptree::filter(|msg: Message| msg_is_spotify_link(msg)).endpoint(request_track))
             .endpoint(user_help),
         );
 
     dialogue::enter::<Update, InMemStorage<State>, State, _>()
         .branch(callback_handler)
         .branch(message_handler)
+}
+
+fn msg_is_spotify_link(msg: Message) -> bool {
+    msg.text().is_some_and(|text| {
+        Regex::new(r"https?://(open\.spotify\.com|spotify\.link)/(\w+)")
+            .unwrap()
+            .find(text)
+            .is_some()
+    })
 }
 
 async fn spotify_login(
@@ -378,7 +377,7 @@ impl SpotifyTrackId {
     }
     async fn from_url(url: String) -> Option<Self> {
         let re_link = Regex::new(r"https?://spotify\.link/(\w+)").unwrap();
-        let track_url = if let Some(mat) = re_link.find(&url) {
+        let track_url = if re_link.is_match(&url) {
             Self::resolve_spotify_link(&url).await
         } else {
             None
