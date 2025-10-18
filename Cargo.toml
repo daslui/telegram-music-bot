@@ -5,11 +5,11 @@ edition = "2021"
 
 [dependencies]
 teloxide = { version = "0.17", features = ["macros"] }
-log = "0.4"
+log = "0.4.28"
 pretty_env_logger = "0.5"
-tokio = { version =  "1.8", features = ["rt-multi-thread", "macros"] }
-rspotify = {version = "0.14.0", features = ["cli"]}
-serde = "1.0.215"
-serde_json = "1.0.133"
-regex = "1.11.1"
-reqwest = { version = "0.12.24", features = ["blocking"] }
+tokio = { version = "1.48.0", features = ["rt-multi-thread", "macros"] }
+rspotify = { version = "0.15.1" }
+serde = "1.0.228"
+serde_json = "1.0.145"
+regex = "1.12.2"
+reqwest = { version = "0.12.24" }
