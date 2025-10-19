@@ -345,10 +345,6 @@ pub enum State {
     #[default]
     Start,
     SpotifyLogin, // --> Start
-    ReceiveFullName,
-    ReceiveProductChoice {
-        full_name: String,
-    },
 }
 
 #[derive(Clone)]
