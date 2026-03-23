@@ -1,15 +1,15 @@
 [package]
 name = "tg-music-bot"
-version = "0.2.0"
-edition = "2021"
+version = "0.2.1"
+edition = "2024"
 
 [dependencies]
 teloxide = { version = "0.17", features = ["macros"] }
-log = "0.4.28"
+log = "0.4.29"
 pretty_env_logger = "0.5"
-tokio = { version = "1.48.0", features = ["rt-multi-thread", "macros"] }
+tokio = { version = "1.50.0", features = ["rt-multi-thread", "macros"] }
 rspotify = { version = "0.16.0" }
 serde = "1.0.228"
-serde_json = "1.0.145"
-regex = "1.12.2"
-reqwest = { version = "0.13.1" }
+serde_json = "1.0.149"
+regex = "1.12.3"
+reqwest = { version = "0.13.2" }
