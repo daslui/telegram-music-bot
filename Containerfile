@@ -1,18 +1,13 @@
-ARG RUST_VERSION=1.94
-ARG APP_NAME=tg-music-bot
+ARG PACKAGE=tg-music-bot
 
-FROM quay.io/hummingbird/rust:${RUST_VERSION}-builder AS build
-ARG APP_NAME
+FROM cgr.dev/chainguard/rust:latest-dev as build
+USER root
+RUN apk add --no-cache openssl-dev pkgconf
+USER nonroot
 WORKDIR /app
+COPY --chown=nonroot:nonroot . .
+RUN cargo build --release
 
-COPY . /app/
-
-RUN cargo build --release && \
-cp ./target/release/$APP_NAME /bin/bot_server
-
-FROM quay.io/hummingbird/core-runtime:latest-openssl AS final
-
-COPY --from=build /bin/bot_server /bin/
-
-CMD ["/bin/bot_server"]
-
+FROM cgr.dev/chainguard/glibc-dynamic
+COPY --from=build --chown=nonroot:nonroot /app/target/release/${PACKAGE} /usr/local/bin/${PACKAGE}
+CMD ["/usr/local/bin/${PACKAGE}"]
