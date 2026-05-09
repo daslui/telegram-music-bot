@@ -1,4 +1,5 @@
-ARG PACKAGE=tg-music-bot
+ARG RUST_VERSION=1.94
+ARG APP_NAME=tg-music-bot
 
 FROM cgr.dev/chainguard/rust:latest-dev as build
 USER root
