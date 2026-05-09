@@ -1,14 +1,25 @@
 ARG RUST_VERSION=1.94
-ARG APP_NAME=tg-music-bot
 
-FROM cgr.dev/chainguard/rust:latest-dev as build
+FROM cgr.dev/chainguard/rust:latest-dev AS build
 USER root
 RUN apk add --no-cache openssl-dev pkgconf
 USER nonroot
 WORKDIR /app
 COPY --chown=nonroot:nonroot . .
-RUN cargo build --release
+RUN cargo build --release --bin tg-music-bot
 
-FROM cgr.dev/chainguard/glibc-dynamic
-COPY --from=build --chown=nonroot:nonroot /app/target/release/${PACKAGE} /usr/local/bin/${PACKAGE}
-CMD ["/usr/local/bin/${PACKAGE}"]
+FROM cgr.dev/chainguard/wolfi-base AS libs
+USER root
+COPY --from=cgr.dev/chainguard/glibc-dynamic:latest / /chroot/
+RUN apk add --no-cache --no-scripts --root /chroot --initdb \
+      --keys-dir /etc/apk/keys \
+      --repositories-file /etc/apk/repositories \
+      openssl \
+      ca-certificates-bundle
+RUN rm -rf /chroot/lib/apk /chroot/var/cache/apk
+
+
+FROM scratch
+COPY --from=libs /chroot/ /
+COPY --from=build --chown=nonroot:nonroot /app/target/release/tg-music-bot /usr/local/bin/tg-music-bot
+CMD ["/usr/local/bin/tg-music-bot"]
