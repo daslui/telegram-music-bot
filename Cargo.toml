@@ -4,12 +4,12 @@ version = "0.2.1"
 edition = "2024"
 
 [dependencies]
-teloxide = { version = "0.17", features = ["macros"] }
+teloxide = { version = "0.17", default-features = false, features = ["macros", "ctrlc_handler", "rustls"] }
 log = "0.4.29"
 pretty_env_logger = "0.5"
 tokio = { version = "1.50.0", features = ["rt-multi-thread", "macros"] }
-rspotify = { version = "0.16.0" }
+rspotify = { version = "0.16.1", default-features = false, features = ["client-reqwest", "reqwest-rustls-tls"] }
 serde = "1.0.228"
 serde_json = "1.0.149"
 regex = "1.12.3"
-reqwest = { version = "0.13.2" }
+reqwest = { version = "0.13.2", default-features = false, features = ["rustls", "json"] }
