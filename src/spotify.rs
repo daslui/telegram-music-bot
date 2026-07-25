@@ -19,7 +19,7 @@ pub async fn setup_spotify() -> AuthCodeSpotify {
     let creds =
         Credentials::from_env().expect("RSPOTIFY_CLIENT_ID or RSPOTIFY_CLIENT_SECRET not set");
     let oauth = OAuth {
-        redirect_uri: "http://localhost:8888/callback".to_string(),
+        redirect_uri: "https://127.0.0.1:8888/callback".to_string(),
         scopes: scopes!(
             "user-read-private",
             "user-read-email",

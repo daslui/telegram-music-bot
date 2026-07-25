@@ -83,7 +83,7 @@ From the **voting chat**, send:
 This starts the login flow. After authenticating, Spotify will redirect you to a URL like:
 
 ```text
-http://localhost:8888/callback?code=...
+https://127.0.0.1:8888/callback?code=...
 ```
 
 It will likely show an error in the browser — **this is expected**. Just **copy the full URL** and **paste it into the Telegram chat**. The bot will store the session.
