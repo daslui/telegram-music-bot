@@ -8,13 +8,13 @@ use std::{
 use regex::Regex;
 use reqwest::redirect;
 use rspotify::{
+    AuthCodeSpotify,
     model::{Country, FullTrack, Market, TrackId},
     prelude::{BaseClient, OAuthClient},
-    AuthCodeSpotify,
 };
 
 pub async fn setup_spotify() -> AuthCodeSpotify {
-    use rspotify::{scopes, AuthCodeSpotify, Credentials, OAuth};
+    use rspotify::{AuthCodeSpotify, Credentials, OAuth, scopes};
 
     let creds =
         Credentials::from_env().expect("RSPOTIFY_CLIENT_ID or RSPOTIFY_CLIENT_SECRET not set");
@@ -181,12 +181,11 @@ pub fn format_track_text(track: &FullTrack) -> String {
         .join(" ");
     log::info!("track {:?}", track);
     format!(
-        "🎵 <b>{}</b>\n👥 <b>{}</b>\n💿 <b>{}</b>\n🔥 {} • ⏱️ {}\n{} • {}",
+        "🎵 <b>{}</b> • ⏱️ {:02}\n👥 <b>{}</b>\n💿 <b>{}</b>\n{} • {}",
         track.name,
+        duration,
         artists,
         track.album.name,
-        track.popularity,
-        duration,
         listen.unwrap_or("".to_string()),
         covers
     )
